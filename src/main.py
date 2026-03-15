@@ -1,12 +1,30 @@
 from datetime import datetime
 from pathlib import Path
 import whisper
+from tqdm import tqdm
+
+from src.downloader import download_media
+from src.llm import deepseek_punctuate
+
+
+def chunk_segments(segments, chunk_size=5):
+    chunks = []
+    for i in range(0, len(segments), chunk_size):
+        chunk = segments[i:i + chunk_size]
+        text = "\n".join(seg["text"].strip() for seg in chunk if seg["text"].strip())
+        if text:
+            chunks.append(text)
+    return chunks
 
 # 项目根目录
 BASE_DIR = Path(__file__).resolve().parent.parent
-audio_path = BASE_DIR / "samples" / "a.aac"
+download_dir = BASE_DIR / "downloads"
 
-# 输出目录
+print("Please enter the video url: ")
+url = input()
+audio_path = download_media(url, download_dir)
+print(f"Downloaded: {audio_path}")
+
 output_dir = BASE_DIR / "output"
 output_dir.mkdir(exist_ok=True)
 
@@ -22,11 +40,16 @@ print(f"正在识别: {audio_path}")
 model = whisper.load_model("small")
 result = model.transcribe(str(audio_path), language="zh")
 
-# 写入文件
-with open(output_file, "w", encoding="utf-8") as f:
-    for segment in result["segments"]:
-        text = segment["text"].strip()
-        if text:
-            f.write(text + "\n")
+chunks = chunk_segments(result["segments"], chunk_size=5)
 
-print("输出文件:", output_file)
+processed_chunks = []
+for chunk in tqdm(chunks, desc="DeepSeek 后处理"):
+    new_text = deepseek_punctuate(chunk)
+    processed_chunks.append(new_text)
+
+final_text = "\n".join(processed_chunks)
+
+with open(output_file, "w", encoding="utf-8") as f:
+    f.write(final_text)
+
+print(f"已写入: {output_file}")
