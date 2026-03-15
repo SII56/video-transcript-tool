@@ -1,7 +1,10 @@
 from datetime import datetime
 from pathlib import Path
 import whisper
+from faster_whisper import WhisperModel
 from tqdm import tqdm
+import os
+
 
 from src.downloader import download_media
 from src.llm import deepseek_punctuate
@@ -37,10 +40,27 @@ if not audio_path.exists():
 
 print(f"正在识别: {audio_path}")
 
-model = whisper.load_model("small")
-result = model.transcribe(str(audio_path), language="zh")
+model = WhisperModel(
+    "small",
+    device="cpu",
+    compute_type="int8"
+)
 
-chunks = chunk_segments(result["segments"], chunk_size=5)
+segments, info = model.transcribe(
+    str(audio_path),
+    language="zh",
+    vad_filter=True
+)
+
+segment_list = []
+for segment in segments:
+    segment_list.append({
+        "start": segment.start,
+        "end": segment.end,
+        "text": segment.text
+    })
+
+chunks = chunk_segments(segment_list, chunk_size=5)
 
 processed_chunks = []
 for chunk in tqdm(chunks, desc="DeepSeek 后处理"):
@@ -51,5 +71,9 @@ final_text = "\n".join(processed_chunks)
 
 with open(output_file, "w", encoding="utf-8") as f:
     f.write(final_text)
+
+KEEP_DOWNLOAD = False
+if not KEEP_DOWNLOAD and os.path.exists(audio_path):
+    os.remove(audio_path)
 
 print(f"已写入: {output_file}")

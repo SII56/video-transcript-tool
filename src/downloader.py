@@ -18,7 +18,7 @@ def download_media(url: str, download_dir: Path) -> Path:
     ydl_opts = {
         "outtmpl": outtmpl,
         # "cookiesfrombrowser": ("chrome",),
-
+        "socket_timeout": 20,
         "format": "bestaudio/best",
         "noplaylist": True,
         "quiet": True,
